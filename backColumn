@@ -1,0 +1,70 @@
+/*
+	
+*/
+
+#include</home/suraj/dBProject/DBHeader.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+/*
+	@arg1:: string of the name of the column.
+	@arg2:: string of the database file name in which the column need to delete.
+	@arg3:: flag to tell which option of deletion is being choosen.
+		flag=0 , if need to set reset the dirty bit.
+		flag=1 , delete all the data related to all the dirty column.
+	return -1 if any error occrs 
+		1 if succesful.
+
+*/
+
+
+int deleteColDb(char *strColName, char *strDbFileName, int flag){
+	
+	FILE *fpDbFile;
+	void *ptrBlk;
+	DBMETA dbMetaData;
+	COLMETA *ptrColMetaData;
+	int currOffset, i, isModify=0, numColMetaInBlk, numByteToRead, numColMetaReaded=0;
+
+	if(!strColName || !strDbFileName || flag<0 || flag>1)
+		return -1;
+	
+	if((fpDbFile = fopen(strDbFileName,"r+")) == NULL)
+		return -1;
+	
+	if((ptrBlk=malloc(BLKSIZE)) == NULL)
+		return -1;
+
+	if( (fread(&dbMetaData,sizeof(DBMETA),1,fpDbFile)) <=0)
+		return -1;
+	
+	currOffset = dbMetaData.sizeDbMeta;
+	numColMetaInBlk = (512/dbMetaData.sizeColMeta);
+	numByteToRead = numColMetaInBlk * dbMetaData.sizeColMeta;
+
+	while(!isModify && numColMetaReaded < dbMetaData.numColumn ){
+		int numByteReaded;
+		if( (numByteReaded=fread(ptrBlk,numByteToRead,1,fpDbFile))<= 0 )
+			return -1;
+		i=0;
+		while(numColMetaReaded < dbMetaData.numColumn && i<numByteReaded/dbMetaData.sizeColMeta){
+			ptrColMetaData = (COLMETA *)(ptrBlk+i*dbMetaData.sizeColMeta);
+			if(strcmp(strColName,ptrColMetaData->colName)==0){
+				setDIRTY(ptrColMetaData);
+				fseek(fpDbFile, currOffset+i*dbMetaData.sizeColMeta, SEEK_SET);
+				if(fwrite(ptrColMetaData, dbMetaData.sizeColMeta, 1, fpDbFile)<=0)
+					return -1;
+				isModify=1;
+				return 1;
+			}
+		currOffset+=numByteReaded;
+		i++;
+		numColMetaReaded++;
+		}
+	}
+	return -1;
+}
+
+int main(){
+	return 0;
+}
